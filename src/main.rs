@@ -1,3 +1,5 @@
+#![warn(clippy::all, clippy::pedantic)]
+
 use bracket_lib::prelude::*;
 
 const SCREEN_HIEGHT: i32 = 50;
@@ -14,6 +16,8 @@ struct State {
     game_mode: GameMode,
     player: Dragon,
     frame_time: f32,
+    score: i32,
+    wall: Wall
 }
 
 impl State {
@@ -22,6 +26,8 @@ impl State {
             game_mode: GameMode::Menu,
             player: Dragon::new(5, 25),
             frame_time: 0.0,
+            score: 0,
+            wall: Wall::new(SCREEN_WIDTH, 0)
         }
     }
 
@@ -39,7 +45,17 @@ impl State {
 
     fn restart(&mut self) {
         self.player = Dragon::new(5, 25);
+        self.wall = Wall::new(SCREEN_WIDTH, 0);
+        self.score = 0;
         self.transition_to_playing();
+    }
+    
+    fn render(&self, ctx: &mut BTerm) {
+        ctx.print(0, 0, "Press SPACE to flap your dragon's wings");
+        ctx.print(0, 1, &format!("Score: {}", self.score));
+    
+        self.player.render(ctx);
+        self.wall.render(self.player.x, ctx);
     }
 
     fn main_menu(&mut self, ctx: &mut BTerm) {
@@ -72,19 +88,25 @@ impl State {
                 _ => (),
             }
         }
+        
+        self.render(ctx);
 
-        self.player.render(ctx);
-        ctx.print(0, 0, "Press SPACE to flap your dragon's wings");
-
-        if self.player.y > SCREEN_HIEGHT {
+        if self.player.y > SCREEN_HIEGHT || self.wall.collision_detected(&self.player) {
             self.transition_to_end();
         }
+        
+        if self.player.x > self.wall.x {
+            self.score += 1;
+            self.wall = Wall::new(self.player.x + SCREEN_WIDTH, self.score);
+        }        
+
     }
 
     fn dead(&mut self, ctx: &mut BTerm) {
         ctx.cls();
         ctx.print_centered(9, "You are dead!");
-        ctx.print_centered(10, "Press any key to continue...");
+        ctx.print_centered(10, &format!("Your score was {}", self.score));
+        ctx.print_centered(11, "Press any key to continue...");
 
         if let Some(_) = ctx.key {
             self.transition_to_menu();
@@ -133,7 +155,7 @@ impl Dragon {
     }
 
     fn flap_wings(&mut self) {
-        self.velocity = -2.0;
+        self.velocity = if self.velocity > -2.0 { self.velocity - 0.9 } else { -2.0 };
     }
 
     fn render(&self, ctx: &mut BTerm) {
